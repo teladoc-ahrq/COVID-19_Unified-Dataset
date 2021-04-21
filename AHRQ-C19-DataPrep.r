@@ -55,9 +55,9 @@ ORDER BY J.ID, J.Date"
 JHU_STATE_D<-sqldf(mvavg)
 
 avgmvd<-"select J.*, 
-  (J.Moving_Average_Cases - lag(J.Moving_Average_Cases, 1, NULL) 
-  over(partiton by J.ID order by J.Date)) as D1_Moving_Average from
-JHU_STATE_D as J"
+  (J.Moving_Avg_Cases - lag(J.Moving_Avg_Cases, 1, NULL) 
+    over (partition by J.ID order by J.Date asc)) as D1_Moving_Average from
+  JHU_STATE_D as J"
 
 JHU_STATE_D<-sqldf(avgmvd)
 
@@ -68,19 +68,20 @@ save(JHU_STATE_D,file="JHU_STATE_D.Rdata")
 library(plotly)
 library(ggplotlyExtra)
 
-temp<-sqldf("select * from JHU_STATE_D where NameID='New York, United States'")
-p <- ggplot(temp, aes(Date, Moving_Avg_D1_Cases))
-p + geom_point() + stat_smooth()
-ggplotly()
+temp<-sqldf("select * from JHU_STATE_D where NameID='California, United States'")
+
+#p <- ggplot(temp, aes(Date, Moving_Avg_D1_Cases))
+#p + geom_point() + stat_smooth()
+#ggplotly()
 
 
 ggplot(temp, aes(x=Date)) +
   geom_bar(aes(y=Cases_New), stat="identity", size=.1) + 
-  geom_line( aes(y=D1_Moving_Average), size=1, color="red") +
+  geom_line( aes(y=10*D1_Moving_Average), size=.5, color="blue") +
   scale_y_continuous(
   # Features of the first axis
   name = "New Cases",
   # Add a second axis and specify its features
-  sec.axis = sec_axis( ~.*1,name="Delta Cases")
+  sec.axis = sec_axis( ~.*.1,name="Change in Moving Average of Cases")
 )
 
