@@ -1,9 +1,11 @@
 # CREATE PLOTS FROM JHU UNIFIED DATA SET
 # CLONED THIS REPOSITORY
 # https://github.com/CSSEGISandData/COVID-19_Unified-Dataset
+# When you clone the repo, you can use SSH instead of http with this config
+# git config remote.origin.url git@github.com:teladoc-ahrq/COVID-19_Unified-Dataset.git
 
-#git config remote.origin.url git@github.com:daniella_meeker/your_project.git
-
+# ON MAC OS THIS IS REQUIRED TO RUN sqldf
+options(gsubfn.engine = "R") 
 library(sqldf)
 library(tidyverse)
 JHU <- readRDS('COVID-19.rds')
@@ -13,7 +15,7 @@ LU <- read_csv('COVID-19_LUT.csv')
 JHU_STATE<-sqldf("SELECT JHU.*, LU.NameID, LU.ISO2 from JHU inner join LU 
       on 
       (LU.id=JHU.id and LU.ISO1_2C='US' 
-      and LU.Level = 'State' and Source='JHU' 
+      and (LU.Level = 'State' or Level='Country') and Source='JHU' 
       and Type='Confirmed') 
       order by jhu.id, jhu.date")
 
