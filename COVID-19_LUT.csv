@@ -1189,6 +1189,7 @@ BRGO5222054,Municipality,076,BRA,BR,GO,BR-GO,,,,5222054,,-49.80,-17.74,8743,2,Br
 BRGO5222203,Municipality,076,BRA,BR,GO,BR-GO,,,,5222203,,-47.06,-15.04,6171,2,Brazil,Goias,Vila Boa,,"Vila Boa, Goias, Brazil"
 BRGO5222302,Municipality,076,BRA,BR,GO,BR-GO,,,,5222302,,-48.89,-15.46,5821,2,Brazil,Goias,Vila Propicio,,"Vila Propicio, Goias, Brazil"
 BRMA,State,076,BRA,BR,MA,BR-MA,,,,,,-45.27,-4.96,7075181,1,Brazil,Maranhao,,,"Maranhao, Brazil"
+BRMA21,Municipality,076,BRA,BR,MA,BR-MA,,,,21,,,,,2,Brazil,Maranhao,Unassigned,,"Unassigned, Maranhao, Brazil"
 BRMA2100055,Municipality,076,BRA,BR,MA,BR-MA,,,,2100055,,-47.48,-4.95,112445,2,Brazil,Maranhao,Acailandia,,"Acailandia, Maranhao, Brazil"
 BRMA2100105,Municipality,076,BRA,BR,MA,BR-MA,,,,2100105,,-43.32,-4.13,6524,2,Brazil,Maranhao,Afonso Cunha,,"Afonso Cunha, Maranhao, Brazil"
 BRMA2100154,Municipality,076,BRA,BR,MA,BR-MA,,,,2100154,,-42.12,-2.84,12571,2,Brazil,Maranhao,Agua Doce do Maranhao,,"Agua Doce do Maranhao, Maranhao, Brazil"
@@ -7960,6 +7961,7 @@ ITG26,NUTS3,380,ITA,IT,88,IT-88,,ITG26,,,,9.33,40.32,153448,3,Italy,Insular Ital
 ITG27,NUTS3,380,ITA,IT,88,IT-88,,ITG27,,,,9.11,39.22,558684,3,Italy,Insular Italy,Sardinia,Cagliari,"Cagliari, Sardinia, Insular Italy, Italy"
 ITG28,NUTS3,380,ITA,IT,88,IT-88,,ITG28,,,,8.59,39.90,158513,3,Italy,Insular Italy,Sardinia,Oristano,"Oristano, Sardinia, Insular Italy, Italy"
 ITG2Y,NUTS3,380,ITA,IT,88,IT-88,,ITG2Y,,,,8.53,39.17,354554,3,Italy,Insular Italy,Sardinia,South Sardinia,"South Sardinia, Sardinia, Insular Italy, Italy"
+ITG2Z,NUTS3,380,ITA,IT,88,IT-88,,ITG2Z,,,,,,,3,Italy,Insular Italy,Sardinia,Out of Region/Province,"Out of Region/Province, Sardinia, Insular Italy, Italy"
 ITH,NUTS1,380,ITA,IT,F,IT-F,,ITH,,,,11.36,45.65,11652827,1,Italy,Northeast Italy,,,"Northeast Italy, Italy"
 ITH1,NUTS2,380,ITA,IT,BZ,IT-BZ,,ITH1,,,,11.36,46.50,531178,2,Italy,Northeast Italy,Bolzano-Bozen,,"Bolzano-Bozen, Northeast Italy, Italy"
 ITH10,NUTS3,380,ITA,IT,BZ,IT-BZ,,ITH10,,,,11.36,46.50,531178,3,Italy,Northeast Italy,Bolzano-Bozen,Bolzano-Bozen,"Bolzano-Bozen, Bolzano-Bozen, Northeast Italy, Italy"
@@ -8084,6 +8086,7 @@ JPZZ,Province,392,JPN,JP,ZZ,JP-ZZ,,,,,,,,,1,Japan,Unassigned,,,"Unassigned, Japa
 KE,Country,404,KEN,KE,KE,KE,,KE,,,,37.91,-0.02,53771300,0,Kenya,,,,Kenya
 KG,Country,417,KGZ,KG,KG,KG,,KG,,,,74.77,41.20,6524191,0,Kyrgyzstan,,,,Kyrgyzstan
 KH,Country,116,KHM,KH,KH,KH,,KH,,,,104.92,11.55,16718971,0,Cambodia,,,,Cambodia
+KI,Country,296,KIR,KI,KI,KI,,KI,,,,-168.73,-3.37,117606,0,Kiribati,,,,Kiribati
 KM,Country,174,COM,KM,KM,KM,,KM,,,,43.33,-11.65,869595,0,Comoros,,,,Comoros
 KN,Country,659,KNA,KN,KN,KN,,KN,,,,-62.78,17.36,53192,0,Saint Kitts and Nevis,,,,Saint Kitts and Nevis
 KR,Country,410,KOR,KR,KR,KR,,KR,,,,127.77,35.91,51269183,0,South Korea,,,,South Korea
@@ -10540,6 +10543,8 @@ NLZZ,Province,528,NLD,NL,ZZ,NL-ZZ,,,,,,,,,1,Netherlands,Unassigned,,,"Unassigned
 NO,Country,578,NOR,NO,NO,NO,,NO,,,,8.47,60.47,5421242,0,Norway,,,,Norway
 NP,Country,524,NPL,NP,NP,NP,,NP,,,,84.25,28.17,29136808,0,Nepal,,,,Nepal
 NZ,Country,554,NZL,NZ,NZ,NZ,,NZ,,,,174.89,-40.90,4822233,0,New Zealand,,,,New Zealand
+NZCK,Province,554,NZL,NZ,CK,NZ-CK,,,,,,-159.78,-21.24,17459,1,New Zealand,Cook Islands,,,"Cook Islands, New Zealand"
+OLYMPICS2020,Olympics,,,,,,,,,,,139.77,35.65,,0,Summer Olympics 2020,,,,Summer Olympics 2020
 OM,Country,512,OMN,OM,OM,OM,,OM,,,,55.92,21.51,5106622,0,Oman,,,,Oman
 PA,Country,591,PAN,PA,PA,PA,,PA,,,,-80.78,8.54,4314768,0,Panama,,,,Panama
 PE,Country,604,PER,PE,PE,PE,,PE,,,,-75.02,-9.19,32971846,0,Peru,,,,Peru
