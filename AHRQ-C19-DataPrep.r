@@ -2,23 +2,113 @@
 # CLONED THIS REPOSITORY
 # https://github.com/CSSEGISandData/COVID-19_Unified-Dataset
 # When you clone the repo, you can use SSH instead of http with this config
-# git config remote.origin.url git@github.com:teladoc-ahrq/COVID-19_Unified-Dataset.git
+# git configs remote.origin.url git@github.com:teladoc-ahrq/COVID-19_Unified-Dataset.git
 
 # ON MAC OS THIS IS REQUIRED TO RUN sqldf
 options(gsubfn.engine = "R") 
 library(sqldf)
 library(tidyverse)
 JHU <- readRDS('COVID-19.rds')
+# This is really annoying and screws up partitioning
+JHU$DateCh<-as.character(JHU$Date)
+JHU<-sqldf("Select JHU.*, strftime('%Y', JHU.DateCh) as Year, strftime('%m', JHU.DateCh) as Month from JHU")
 LU <- read_csv('COVID-19_LUT.csv')
 
-
+# Get US Tested, Deaths, and Cases
 JHU_STATE<-sqldf("SELECT JHU.*, LU.NameID, LU.ISO2 from JHU inner join LU 
       on 
       (LU.id=JHU.id and LU.ISO1_2C='US' 
-      and (LU.Level = 'State' or Level='Country') and Source='JHU' 
-      and Type='Confirmed') 
+      and (LU.Level = 'State' or Level='Country') and 
+      (
+        (Source='JHU' and Type='Confirmed') or
+        (Source='JHU' and Type='Deaths') or
+        (Source='CTP' and Type='Tested')
+      ))")
+# clear memory
+rm(JHU,LU)
+# Add moving averages
+JHU_STATE_MA<-sqldf (
+  "select J.*, 
+  avg(Cases_New) OVER ( PARTITION BY J.ID, J.Type
+                  ORDER BY J.Date asc
+                  RANGE BETWEEN 7 PRECEDINGß
+                  AND 0 FOLLOWING
+              ) AS MA_Type_New
+  FROM JHU_STATE as J
+  --where J.Type='Confirmed' and J.ID='US'
+  "
+)
+rm(JHU_STATE)
+JHU_STATE_MA<-sqldf(
+"select J.Date, J.Year, J.Month, J.ID, J.ISO2 as ST,
+  T.MA_Type_New as TestMA, T.Cases_New as Tested,
+  D.MA_Type_New as DeathsMA, D.Cases_New as Deaths,
+  C.MA_Type_New as CasesMA, C.Cases_New as Cases
+from JHU_STATE_MA as J
+join JHU_STATE_MA as T on 
+(T.ID=J.ID and T.Date=J.DAte and T.Type='Tested')
+join JHU_STATE_MA as C on 
+(T.ID=J.ID and T.Date=J.Date and C.Type='Confirmed')
+join JHU_STATE_MA as D on 
+(D.ID=J.ID and D.Date=J.Date and D.Type='Deaths')
+")
+write_csv(JHU_STATE_MA,'~/teladoc-prv/JHU/JHU_STATE')
+
+
+JHU_US_DEATH<-sqldf("SELECT JHU.*, 
+JHU.Cases_New as Deaths_New, LU.NameID, LU.ISO2 from JHU inner join LU 
+      on 
+      (LU.id=JHU.id and LU.ISO1_2C='US' 
+      and (Level='Country') and Source='JHU' 
+      and Type='Deaths') 
       order by jhu.id, jhu.date")
 
+mvavgusd<-
+  "SELECT J.*,
+avg(Deaths_New) OVER ( PARTITION BY J.ID
+                  ORDER BY J.Date asc
+                  RANGE BETWEEN 7 PRECEDING
+                  AND 0 FOLLOWING
+) AS Moving_Avg_Deaths
+
+FROM 
+JHU_US_DEATH as J
+ORDER BY J.ID, J.Date"
+
+JHU_US_DEATH_MA<-sqldf(mvavgusd)
+
+mvavgust<-
+  "SELECT T.*, avg(Cases_New) OVER ( PARTITION BY T.ID
+                  ORDER BY T.Date asc
+                  RANGE BETWEEN 7 PRECEDING
+                  AND 0 FOLLOWING
+              ) AS Moving_Avg_Tested
+FROM JHU as T
+inner join LU 
+      on 
+      (LU.id=T.id and LU.ISO1_2C='US' 
+      and (LU.Level='Country') and T.Source='CTP' ) 
+
+WHERE T.Type='Tested'
+ORDER BY T.ID, T.Date"
+
+JHU_US_TESTED<-sqldf(mvavgust)
+
+
+
+
+
+TDH_data_JHU <-sqldf("SELECT td.*,D.Deaths, D.Moving_Avg_Death,t.Tests, t.Moving_Avg_Tested FROM TDH_data 
+join JHU_US_DEATH as D
+on td.date=D.date
+join JHU_US_TESTS as T
+on TD.DATE=T.DATE"
+)
+
+TDH_data <- read_excel("~/teladoc-ahrq/TDdata/covid19_publication_rawdata_import_deaths_tests.xlsx")
+TDH_WT <- read_csv('~/teladoc-prv/ProvWk_StateCount.csv')
+
+#**************************************************************************#
 rm(JHU,LU)
 
 JHU_STATE_D<-sqldf("select J.*, 
@@ -55,6 +145,7 @@ JHU_STATE_D as J
 ORDER BY J.ID, J.Date"
 
 JHU_STATE_D<-sqldf(mvavg)
+
 
 avgmvd<-"select J.*, 
   (J.Moving_Avg_Cases - lag(J.Moving_Avg_Cases, 1, NULL) 
