@@ -8,80 +8,135 @@ td_path<-"~/teladoc-ahrq/covid19_publication_rawdata_import.xlsx"
 td_st_wk<-"~/teladoc-prv/ProvWk_StateCount.csv"
 # ON MAC OS THIS IS REQUIRED TO RUN sqldf
 options(gsubfn.engine = "R") 
-#install.packages("tidyverse")
 library(sqldf)
 library(tidyverse)
 library(readxl)
+library(ggplot2)
 td_c19<-read_excel(td_path)
+td_c19$tddate<-as.Date(as.character(td_c19$date))
+td_c19<-select(td_c19,-date)
+# get state-level weights
 td_wt<-read_csv(td_st_wk)
+# from one row per NPI-week-state to one row per state-month-year
 td_wt<-sqldf("select consult_year, consult_month, consult_state,
               sum(n) as n from td_wt
               group by consult_state, consult_year, consult_month
-             
              ")
 
-td_wt<-sqldf("select n, consult_year , consult_month, consult_state,
-             sum(n) over(partition by consult_year, consult_month)
-              as month_denom
-              from td_wt
-order by consult_year, consult_month, consult_state
-             "
-             )
-
-td_wt<-sqldf("select distinct *, n/month_denom from td_wt")
 
 JHU <- readRDS('COVID-19.rds')
-# This is really annoying and screws up partitioning
+# Need to cast dates as strings to get month and year part of dates
 JHU$DateCh<-as.character(JHU$Date)
 JHU<-sqldf("Select JHU.*, strftime('%Y', JHU.DateCh) as Year, strftime('%m', JHU.DateCh) as Month from JHU")
-LU <- read_csv('COVID-19_LUT.csv')
 
+LU <- read_csv('COVID-19_LUT.csv')
 # Get US Tested, Deaths, and Cases
-JHU_STATE<-sqldf("SELECT JHU.*, LU.NameID, LU.ISO2 from JHU inner join LU 
+JHU_STATE<-sqldf("SELECT JHU.*, LU.NameID, LU.ISO2 as State from JHU inner join LU 
       on 
       (LU.id=JHU.id and LU.ISO1_2C='US' 
       and (LU.Level = 'State' or Level='Country') and 
       (
         (Source='JHU' and Type='Confirmed') or
         (Source='JHU' and Type='Deaths') or
-        (Source='CTP' and Type='Tested')
+        (Source='CTP' and Type='Tests')
       ))")
+
+
+JHU_US_UNWT<-sqldf("select * from JHU_STATE where State='US'")
 # clear memory
-rm(JHU,LU)
-# Add moving averages
-JHU_STATE_MA<-sqldf (
-  "select J.*, 
-  avg(Cases_New) OVER ( PARTITION BY J.ID, J.Type
+#rm(JHU,LU)
+# Assign weigts by state
+
+# remove non states from TD denom and get weighting denominator as sum over  all states
+
+td_wt<-sqldf("select  n, consult_year , consult_month, consult_state,
+             sum(n) over(partition by consult_year, consult_month)
+              as month_denom
+              from td_wt
+             where td_wt.Consult_State in (select distinct State from JHU_STATE)")
+
+td_wt<-sqldf("select distinct *, n/month_denom as wt from td_wt")
+
+
+inspect2<-sqldf("select j.*, td.wt from JHU_STATE as j join td_wt as 
+                td on j.month=td.Consult_Month and j.Year=td.Consult_Year and j.STATE!='US'")
+
+# Not TD consults in AS, select only the state-level data
+JHU_STATE_WT<-sqldf("select distinct  J.Cases*td_wt.wt as Cases_wt, 
+                    (j.Cases_New*ifnull(td_wt.wt, 0)) as Cases_New_wtzero , j.Cases_New * td_wt.wt as Cases_New_wt, j.* 
+                  from JHU_STATE as j left join td_wt on (
+                      td_wt.Consult_State=j.State and td_wt.Consult_Month=j.Month and 
+                      j.Year = td_wt.Consult_Year) where j.State not in ('AS', 'US') and j.Year=2020")
+
+#inspect<-sqldf("select round(sum(Cases_New_wt)), sum(Cases_New), round(sum(Cases_New_wtzero)), date, type from JHU_STATE_WT group by Type, Date order by Type, Date")
+JHU_US_WT<-sqldf("select distinct sum(Cases_New_wt) as Cases_New_wt, sum(cases_New) as Cases_New_uw, Date, Type  
+                 from JHU_STATE_WT group by Type, Date")
+
+JHU_US_WT<-sqldf("select distinct j.Cases as Cases_US, j.Cases_new as Cases_New_US, w.* from JHU_US_WT as w 
+                  join JHU_US_UNWT as j on w.Type=j.Type and w.Date=j.Date")
+
+# plot<-sqldf("select * from JHU_US_WT where Type='Confirmed'")
+# ggplot(data=plot, aes(x=Date))+
+#               geom_line(aes(y=Cases_New_US, color='blue')) +
+#               geom_line(aes(y=Cases_New_wt*10, color='red'))
+# scaling reduces the number of TD cases by a factor of 10, mostly same shape
+
+# Add moving averages for J.ID=US 
+JHU_US_WT_MA<-sqldf (
+  "select distinct J.Date, Type, J.Cases_New_wt as New_wt, J.Cases_New_uw as New_uw,
+  avg(Cases_New_wt) OVER ( PARTITION BY J.Type
                   ORDER BY J.Date asc
-                  RANGE BETWEEN 7 PRECEDINGß
+                  RANGE BETWEEN 7 PRECEDING
                   AND 0 FOLLOWING
-              ) AS MA_Type_New
-  FROM JHU_STATE as J
-  --where J.Type='Confirmed' and J.ID='US'
+              ) AS MA_New_wt,
+  avg(Cases_New_uw) OVER ( PARTITION BY J.Type
+                  ORDER BY J.Date asc
+                  RANGE BETWEEN 7 PRECEDING
+                  AND 0 FOLLOWING
+              ) AS MA_New_uw
+  FROM JHU_US_WT as J
   "
 )
-rm(JHU_STATE)
-JHU_STATE_MA<-sqldf(
-"select J.Date, J.Year, J.Month, J.ID, J.ISO2 as ST,
+# Switch fromsql to tidyverse syntax no for reshape
+
+JHUWTWIDE<-JHU_US_WT_MA %>% pivot_wider(names_from=Type, 
+                             values_from = c(MA_New_wt, MA_New_uw, 
+                                             New_wt, New_uw))
+
+TDJHU<-sqldf("select J.*, t.* from JHUWTWIDE as J join td_c19 as t on t.tddate=j.Date")
+TDJHU<-select(TDJHU,-tddate)
+
+plot<-TDJHU%>%filter(Date>'2020-03-02')
+ggplot(data=plot, aes(x=Date)) + 
+  geom_line(aes(y=100*MA_New_wt_Confirmed/MA_New_wt_Tests, color='US Test Positivity % (Weighted)')) +
+  geom_line(aes(y=dx_suspected_7dra, color='TD Suspected Cases')) +
+  geom_line(aes(y=MA_New_wt_Confirmed/1000, color='US Case Rates/100 (% Weighted)'))
+ 
+
+#rm(JHU_STATE)
+JHU_US_MA<-sqldf(
+"select J.Date, 
   T.MA_Type_New as TestMA, T.Cases_New as Tested,
+  T.MA_Type_New_wt as TestMA_wt, T.Cases_New_wt as Tested_wt,
   D.MA_Type_New as DeathsMA, D.Cases_New as Deaths,
-  C.MA_Type_New as CasesMA, C.Cases_New as Cases
-from JHU_STATE_MA as J
-join JHU_STATE_MA as T on 
-(T.ID=J.ID and T.Date=J.DAte and T.Type='Tested')
-join JHU_STATE_MA as C on 
-(T.ID=J.ID and T.Date=J.Date and C.Type='Confirmed')
-join JHU_STATE_MA as D on 
-(D.ID=J.ID and D.Date=J.Date and D.Type='Deaths')
+  D.MA_Type_New_wt as DeathsMA_wt, D.Cases_New_wt as Deaths_wt,
+  C.MA_Type_New as CasesMA, C.Cases_New as Cases,
+  C.MA_Type_New_wt as CasesMA_wwt, C.Cases_New_wt as Cases_wt
+from JHU_US_WT as J
+join JHU_US_WT as T on 
+(T.Date=J.DAte and T.Type='Tests')
+join JHU_US_WT as C on 
+(T.Date=J.Date and C.Type='Confirmed')
+join JHU_US_WT as D on 
+(D.Date=J.Date and D.Type='Deaths')
 ")
+ 
+save(C19WT.Rdata)
 
-save.image(file="C19.Rdata")
-
-TDJHU<-sqldf("select J.*, t.* from JHU_STATE_MA as J join td_path as t 
-             
-             
-             ")
-
+#**************************************************************************#
+# END DATA PROCESSING HERE - NOTHING USEFUL BELOW THIS LINE
+# RUN DATA ANALYSIS STEPS AFTER THIS
+#**************************************************************************#
 #write_csv(JHU_STATE_MA,'~/teladoc-prv/JHU/JHU_STATE')
 
 
@@ -96,7 +151,7 @@ on TD.DATE=T.DATE"
 TDH_data <- read_excel("~/teladoc-ahrq/TDdata/covid19_publication_rawdata_import_deaths_tests.xlsx")
 TDH_WT <- read_csv('~/teladoc-prv/ProvWk_StateCount.csv')
 
-#**************************************************************************#
+
 rm(JHU,LU)
 
 JHU_STATE_D<-sqldf("select J.*, 
