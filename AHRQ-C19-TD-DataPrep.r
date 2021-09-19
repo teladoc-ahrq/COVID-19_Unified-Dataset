@@ -87,7 +87,7 @@ JHU_US_WT_MA<-sqldf (
   avg(Cases_New_wt) OVER ( PARTITION BY J.Type
                   ORDER BY J.Date asc
                   RANGE BETWEEN 7 PRECEDING
-                  AND 0 FOLLOWING
+                  AND 0 FOLLOWING 
               ) AS MA_New_wt,
   avg(Cases_New_uw) OVER ( PARTITION BY J.Type
                   ORDER BY J.Date asc
