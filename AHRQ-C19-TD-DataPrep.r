@@ -6,6 +6,7 @@
 
 td_path<-"~/teladoc-ahrq/covid19_publication_rawdata_import.xlsx"
 td_st_wk<-"~/teladoc-prv/ProvWk_StateCount.csv"
+td_outpath<-"~/teladoc-ahrq/teladoc-prv/TDJHU.csv"
 # ON MAC OS THIS IS REQUIRED TO RUN sqldf
 options(gsubfn.engine = "R") 
 library(sqldf)
@@ -13,7 +14,8 @@ library(tidyverse)
 library(readxl)
 library(ggplot2)
 td_c19<-read_excel(td_path)
-td_c19$tddate<-as.Date(as.character(td_c19$date))
+td_c19$tddate_orig<-as.Date(as.character(td_c19$date))
+td_c19$tddate<-as.Date(td_c19$tddate_orig)+2
 td_c19<-select(td_c19,-date)
 # get state-level weights
 td_wt<-read_csv(td_st_wk)
@@ -97,7 +99,7 @@ JHU_US_WT_MA<-sqldf (
   FROM JHU_US_WT as J
   "
 )
-# Switch fromsql to tidyverse syntax no for reshape
+# Switch fromsql to tidyverse syntax for reshape, much more efficient
 
 JHUWTWIDE<-JHU_US_WT_MA %>% pivot_wider(names_from=Type, 
                              values_from = c(MA_New_wt, MA_New_uw, 
@@ -108,10 +110,12 @@ TDJHU<-select(TDJHU,-tddate)
 
 plot<-TDJHU%>%filter(Date>'2020-03-02')
 ggplot(data=plot, aes(x=Date)) + 
-  geom_line(aes(y=100*MA_New_wt_Confirmed/MA_New_wt_Tests, color='US Test Positivity % (Weighted)')) +
   geom_line(aes(y=dx_suspected_7dra, color='TD Suspected Cases')) +
-  geom_line(aes(y=MA_New_wt_Confirmed/1000, color='US Case Rates/100 (% Weighted)'))
- 
+  geom_line(aes(y=100*MA_New_wt_Confirmed/MA_New_wt_Tests, color='US Test Positivity % (Weighted)')) +
+  geom_line(aes(y=MA_New_wt_Confirmed/1000, color='US Case Rates/1000 (Weighted)'))+
+  geom_line(aes(y=MA_New_wt_Deaths/10, color='US Deaths/10 (Weighted)')) 
+write_csv(TDJHU, file=td_outpath)
+save(~/teladoc-prv/C19WT.Rdata)
 
 #rm(JHU_STATE)
 JHU_US_MA<-sqldf(
@@ -131,7 +135,6 @@ join JHU_US_WT as D on
 (D.Date=J.Date and D.Type='Deaths')
 ")
  
-save(C19WT.Rdata)
 
 #**************************************************************************#
 # END DATA PROCESSING HERE - NOTHING USEFUL BELOW THIS LINE
