@@ -7,15 +7,9 @@ library(readxl)
 library(tidyverse)
 library(tseries)
 library(forecast)
-library(broom)
 library(ggplot2)
-theme_set(theme_bw())
-library(dplyr)
-library(mgcv)
-library(tidymv)
+dev.off()
 sdat<-read_csv(dfile)
-# something odd with the first few test observations need to verify data
-sdat<-sdat[5:nrow(sdat),]
 
 # Primary Predictor - dx_suspected_7dra (TD moving average)
 # CHECK - is this window centered on date, or ending on date
@@ -27,11 +21,44 @@ sdat<-sdat[5:nrow(sdat),]
 date<-as.Date(sdat$Date)
 #  cut date into quarters for ggplot
 datecat<-cut(date,breaks="quarter")
+platform=date>as.Date("2020-03-13")
+stdt<-as.numeric(format(date[1],"%j"))
+ 
+#casests<-as.ts(sdat$Cases_New_7dra)
+
+tsdf<- 
+  #as.data.frame(
+
+    ts.intersect(
+    platform=ts(platform,c(2020,stdt),frequency=365),
+    date=ts(date,start=c(2020,stdt), frequency=365),
+    dcat=ts(datecat,start=c(2020,stdt),frequency=365),
+    casest=ts(sdat$MA_New_wt_Confirmed,start=c(2020, stdt),frequency=365),
+    testst=ts(sdat$MA_New_wt_Tests,start=c(2020,stdt), frequency=365),
+    deathst=ts(sdat$MA_New_wt_Deaths,start=c(2020,stdt), frequency=365),
+    suspt=ts(sdat$dx_suspected_7dra,start=c(2020,stdt), frequency=365),
+    susp_14t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-14)
+    #)
+)
 
 
-#TD suspected cases leads by t=-14
-ccf(suspts,deathsts)
-casests<-as.ts(sdat$MA_New_wt_Confirmed)
+train<-window(tsdf,start=c(2020,stdt),end=c(2020,stdt+200))
+test<-window(tsdf,start=c(2020,stdt+201))
+
+
+lmfit<-tslm(data=tsdf,casest~susp_14t*platform+testst)
+fcast<-forecast(lmfit,newdata=as.data.frame(tsdf))
+ltrain<-tslm(data=train,casest~susp_14t*platform+testst)
+fcast<-forecast(ltrain,newdata=as.data.frame(test))
+autoplot(fcast,series="forecast") +
+  autolayer(tsdf[,c("casest")],series="cases")+
+  ggtitle("Forecasts") +
+  xlab("Date") + ylab("Cases")
+
+
+fcast<-forecast(lmfit,newdata=as.data.frame(test))
+
+
 deathsts<-as.ts(sdat$MA_New_wt_Deaths) 
 teststs<-as.ts(sdat$MA_New_wt_Tests)
 suspts<-as.ts(sdat$dx_suspected_7dra)
@@ -41,32 +68,49 @@ deaths<-sdat$MA_New_wt_Deaths
 tests<-sdat$MA_New_wt_Tests
 susp<-sdat$dx_suspected_7dra
 tpos<-sdat$MA_New_wt_Confirmed/sdat$MA_New_wt_Tests
+datecatts<-as.ts(datecat)
+plot<-ts.intersect(casests,deathsts,teststs,suspts)
+susp_14<-as.ts(stats::lag(suspts,-14))
+#set up the autoregression matrix
+xmat<-cbind(
+  casests,
+  susp=suspts,
+  datecatts,
+  teststs,
+  susp_8=stats::lag(suspts,-8),
+  susp_14=stats::lag(suspts,-14),
+  dtcatsusp_14=datecatts*(stats::lag(suspts,-14))
+)
 
-#casests<-as.ts(sdat$Cases_New_7dra)
-ucasests<-as.ts(sdat$MA_New_uw_Confirmed)
-udeathsts<-as.ts(sdat$MA_New_uw_Deaths)
-# unweighted for sanity check
-ccf(ucasests,udeathsts)
-# weighted is not too different; highest at t=0, slow decline
-ccf(casests,deathsts)
+xts<-as.data.frame(ts.intersect(date,ts(casests),ts(suspts),ts(datecatts),ts(teststs),ts(stats::lag(suspts,-14))))
+rows<-c(15:nrow(xmat))
+ar<-c(0,1,1)
+clms<-c("teststs","susp_14")
+arbase<-arima(casests[rows],xreg=xmat[rows,clms],order=ar)
+arsusp<-arima(casests[rows],xreg=xmat[rows,2:4], order=ar)
+arlag<-arima(casests[rows],xreg=xmat[rows,2:6],order=ar)
+arlagi<-arma(casests[rows],xreg=xmat[rows,2:7], order=ar)
+lmlag<-tslm(xts[,"casests"]~xts[,"teststs"]+as.factor(xts[,"datecatts"])*xts[,"susp_14"])
+lmlag<-tslm(tsdf$casests~tsdf$susp_14+tsdf$teststs,data=tsdf)
 
-ctdifts<-as.ts(casests-teststs)
-ccf(ctdifts[1:100],suspts[1:100], lag.max=60)
-ccf(ctdifts[101:200], suspts[101:200], lag.max=60)
-ccf(ctdifts[201:300], suspts[201:300], lag.max=60)
-ccf(ctdifts[300:length(ctdifts)], suspts[300:length(suspts)], lag.max=60)
-ccf(ctdifts[1:90], suspts[1:90], lag.max=60)
-ccf(ctdifts[200:length(ctdifts)],suspts[200:length(suspts)],lag.max=60)
-ccf(tposts[100:length(tposts)],suspts[100:length(tposts)], lag.max=60)
-plot.ts(ctdifts)
-plot.ts(suspts)
-plot.ts(casests)
 
-summary(reg)
-plot.ts(teststs)
-plot.ts(tposts)
+flmlag<-forecast(lmlag)
+autoplot(flmlag)
+
+
+accuracy(arlag)
+
+an<-auto.arima(casests[rows], trace=TRUE)
+plot<-forecast(aa)
 # for binding the time series together
-ts.intersect(date,casests,deathsts,suspts,teststs,tposts)
+ts.intersect(date,casests,deathsts,suspts,teststs,tposts,susp_14)
+e <- tsCV(xmat[rows,1], forecastfunction=rwf, h=14, xreg=xmat[rows,clms])
+mse <- colMeans(e^2, na.rm = T)
+# Plot the MSE values against the forecast horizon
+data.frame(h = 1:14, MSE = mse) %>%
+  ggplot(aes(x = h, y = MSE)) + geom_point()
+
+
 
 # check that AIC is positive and LL is negative for outcome series
 
@@ -81,23 +125,18 @@ plot.ts(suspts,tests)
 
 ccf(suspts,deathsts,lag.max=35,na.action=na.omit,ylab="lagged cross-correlation")
 # CCF - FOR TEST POSITIVITY, PEAK @ -20
-ccf(teststs,casests,lag.max=35,na.action=na.omit,ylab="lagged cross-correlation")
-lag2.plot(casests,suspts,40)
-lag2.plot(casests,deathsts,40)
-lag2.plot(ctdifts,suspts,40)
-ccf(ctdifts[100:340,], suspts[100:340,],lag.max=60)
-lag2.plot(casests,teststs,40)
-acf2(ctdifts)
-auto.arima(ctdifts)
-auto.arima(ctdifts, xreg=suspts)
+ccf(tposts,suspts,lag.max=35,na.action=na.omit,ylab="lagged cross-correlation")
+z<-c(100:nrow(sdat))
+# looking very different 1:100 vs 100:end, but t-8 and t-14 are both very good.
+z<-c(1:100)
+lag2.plot(suspts[z],casests[z],30)
+lag2.plot(suspts,deathst,30)
+lag2.plot(tposts,suspts,30)
 ccf(teststs,casests)
-
-
-
+ccf(casests[z],suspts[z])
 auto.arima(casests)
 #ARIMA(0,2,3)
 auto.arima(suspts)
-auto.arima(casests,xreg=suspts+teststs)
 #ARIMA(4,0,2)
 # accounting for trend and autocorrelation in suspected cases
 # data is a moving aveage - expect high correlation with lag up to 7 days
@@ -107,26 +146,46 @@ acf2(suspts)
 
 #  to ID possible lagged terms
 #   PACF shows possible AR(2)
-#   AR(1), MA(6) model fits well
+#   "AR(1), MA(6) model fits well"
 susp_ar1<-sarima(suspts,2,0,2)
 susp_ar1
 suspres<-resid(sarima(suspts,2,0,2)$fit)
 
+xreg<-ts.intersect(casests,susp_14,teststs,suspts)
 
+auto.arima(casests, xreg=suspts)
+# need to set up the matrix to control for tests
 
+xreg<-cbind(casests,susp_14,teststs)
+acf2(casests)
+auto.arima(casests,xreg=xreg[,2:3])
+
+#get the right order for differencing (stationary at diff=1)
+adf.test(suspts)
+adf.test(casests)
+adf.test(diff(suspts))
+adf.test(diff(casests))
 # Per Wendy "2 looks good" 
 # to ID possible lagged terms
 # PACF shows possible AR(2)
 # AR(1), MA(6) model fits well (expect MA 7)
 susp_ar1<-sarima(susp, c(2,0,2))
+
+
 sa<-arima(casests,xreg=c(suspts,testts))
 susp_ar1
 # Q for wendy -- is this addressing autocorrelation?
 suspres<-resid(sarima(susp,2,0,2)$fit)
 acf2(suspres)
 
-datets<-as.ts(date)
-dcatts<-as.ts(cut(date,breaks="quarter"))
+
+#test for stationarity (1st order difference)
+adf.test(casests) # p=0.085
+adf.test(diff(casests)) # p=0.01
+adf.test(suspts) # p=0.482
+adf.test(diff(suspts)) # p=0.01
+
+
 plot<-as.data.frame(
   ts.intersect(
     datets,
@@ -143,47 +202,9 @@ plot<-as.data.frame(
   date
 )
 
-LagReg(plot$deathsts,plot$suspts, L=3)
 
 
-# pick the bet lags for tests
-z=c(1:335)
-lag2.plot(casests[z],teststs[z],30)
-lag2.plot(casests, suspts)
 
-
-regct<-lm(data=plot, casests~susp_14+teststs)
-regdt<-lm(data=plot, deathsts~susp_14+teststs)
-regd<-lm(data=plot,deathsts~teststs)
-regc<-lm(data=plot, casests~teststs)
-reg<-lm(data=plot, casests~teststs)
-#reg<-lm(deathsts~susp_14*date)
-#reg<-lm(deathsts~date*datecat)
-predc<-predict(regc)
-predd<-predict(regd)
-predct<-predict(regct)
-models<-list(regc,regct, regd, regdt)
-lapply(models, summary)
-
-anova(regc, regct) 
-anova(regd,regdt)
-sapply(models,AIC)
-
-summary(regct)
-AIC(reg)
-BIC(reg)
-
-plot$predc<-predc
-ggplot(data = plot, aes(x=date))+
-  geom_path(aes(y=deathsts,color='Observed deaths')) +
-  geom_path(aes(y=predd,color='Predicted deaths'))
-
-    ggplot(data=plot, aes(x=as.Date(datets),origin=date[1])+
-      geom_path(aes(y=casests, color='Observed Cases'))+
-      #geom_path(aes(y=predc, color='Predicted Cases  (L14, unadjusted)')) +
-      geom_path(aes(y=predct,color='Predicted Cases (L14, test adjusted'))+
-      geom_path(aes(y=suspts*100,color='TD Clinical Dx( x 100'))
-    
 
 
 
