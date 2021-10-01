@@ -47,7 +47,7 @@ test<-window(tsdf,start=c(2020,stdt+201))
 
 
 lmfit<-tslm(data=tsdf,casest~susp_14t*platform+testst)
-fcast<-forecast(lmfit,newdata=as.data.frame(tsdf))
+fcastall<-forecast(lmfit,newdata=as.data.frame(tsdf))
 ltrain<-tslm(data=train,casest~susp_14t*platform+testst)
 fcast<-forecast(ltrain,newdata=as.data.frame(test))
 autoplot(fcast,series="forecast") +
