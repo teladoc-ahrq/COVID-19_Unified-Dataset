@@ -37,7 +37,8 @@ tsdf<-
     testst=ts(sdat$MA_New_wt_Tests,start=c(2020,stdt), frequency=365),
     deathst=ts(sdat$MA_New_wt_Deaths,start=c(2020,stdt), frequency=365),
     suspt=ts(sdat$dx_suspected_7dra,start=c(2020,stdt), frequency=365),
-    susp_14t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-14)
+    susp_14t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-14),
+    pt_susp_14t=platform* stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-14)
     #)
 )
 
@@ -58,7 +59,25 @@ autoplot(fcast,series="forecast") +
 
 fcast<-forecast(lmfit,newdata=as.data.frame(test))
 
+ntsdf=tsdf[,c("testst","suspt_14t")]
+or<-c(2,1,0)
 
+# LIKELIHOOD RATIO TEST COMPARING ADDITION OF LAG OF SUSPECTED CASES
+arautofit<-auto.arima(tsdf[,"casest"], xreg=tsdf[,c("testst","susp_14t","pt_susp_14t","platform")])
+arfitnull<-arima(tsdf[,"casest"], xreg=tsdf[,"testst"], order=or)
+arfitlag<-arima(tsdf[,"casest"],xreg=tsdf[, c("testst","susp_14t")],order=or)
+#resid<-checkresiduals(arfit)
+teststat<- 2*(as.numeric(logLik(arfitlag))-as.numeric(logLik(arfitnull)))
+teststat
+pchisq(teststat, df=1, lower.tail = FALSE )
+# p-value = 0.044
+adf.test(tsdf[,"casest"])
+adf.test(diff(tsdf[,"casest"]))
+adf.test(diff(diff(casest)))
+checkresiduals(arfit)
+arcast<-forecast(arfit,newxreg=tsdf[,c("testst","susp_14t")],newdata=as.data.frame(tsdf),h=10)
+
+arf<-forecast(arfit,h=10)
 deathsts<-as.ts(sdat$MA_New_wt_Deaths) 
 teststs<-as.ts(sdat$MA_New_wt_Tests)
 suspts<-as.ts(sdat$dx_suspected_7dra)
