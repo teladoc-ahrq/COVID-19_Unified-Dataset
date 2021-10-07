@@ -1,4 +1,4 @@
-# options(repos = c(CRAN = "http://cran.rstudio.com"))
+ options(repos = c(CRAN = "http://cran.rstudio.com"))
 # RUN ../AHRQ-C19-DataPrep.r tot creaet TDHU data set
 
 dfile<-"~/teladoc-ahrq/teladoc-prv/TDJHU"
@@ -11,26 +11,20 @@ library(forecast)
 library(ggplot2)
 library("segmented")
 library(lmtest)
+#install.packages("MLmetrics")
+library("MLmetrics")
 #dev.off()
 
 sdat<-read_csv(dfile)
 
-
-## Death - weighted moving average of last week of JHU Deaths)
-## Cases (weighted moving average of last week of JHU Cases)
-
 date<-as.Date(sdat$Date)
 #  cut date into quarters for ggplot
 datecat<-cut(date,breaks="quarter")
-platform=date>as.Date("2020-03-13")
+platform<-date==as.Date("2020-03-13")
 stdt<-as.numeric(format(date[1],"%j"))
- 
-#casests<-as.ts(sdat$Cases_New_7dra)
-
 
 tsdf<- 
   #as.data.frame(
-
     ts.intersect(
     platform=ts(platform,c(2020,stdt),frequency=365),
     date=ts(date,start=c(2020,stdt), frequency=365),
@@ -45,16 +39,15 @@ tsdf<-
     #)
 )
 # OUTCOME OF INTEREST
-outcome<-"death"
 #outcome<-"cases"
 outst<-"casest"
+outst<-"deathst"
 xregc<-c("date","testst","susp_14t")
 xregnc<-c("date","testst")
-ylab<="Cases"
+ylab<-"Cases"
 serieslab<-"Cases"
 
-if(outcome=="death"){
-
+if(outst=="death"){
   outst<-"deathst"
   xregc<-c("date","susp_14t")
   xregnc<-c("date")
@@ -62,20 +55,18 @@ if(outcome=="death"){
   serieslab<-"Deaths"
 }
 
-
 train<-window(tsdf,start=c(2020,stdt),end=c(2020,stdt+255))
 test<-window(tsdf,start=c(2020,stdt+256))
 
 #LINEAR MODELS, ADDING A DATE FOR DRIFT GIVES RSQ~95%
 lmnull<-tslm(data=tsdf,tsdf[,outst]~tsdf[,xregnc])
 lmfit<-tslm(data=tsdf,tsdf[,outst]~tsdf[,xregc]) #same results as LM
-
-
+lmpred<-predict(lmfit,xreg=tsdf[,xregc],newdata=tsdf[,outst],interval="confidence")
 lrtest(lmnull,lmfit)
+
 AIC(lmfit)
 fclmfit<-forecast(lmfit,newdata=as.data.frame(tsdf))
-fc<-ts.intersect(fclmfit$x,fclmfit$mean)
-mdf<-abs((ts(fclmfit$x)-ts(fclmfit$mean)))/ts(fclmfit$x)
+mdf<-(abs(lmfit$x-lmfit$fitted)/lmfit$x)
 mape<-mean(mdf[is.finite(mdf)])*100
 accuracy(lmfit)
 accuracy(lmnull)
@@ -107,37 +98,55 @@ autoplot(fcast,series="forecast") +
   autolayer(train[,outst],series="cases (training data)")+
   autolayer(test[,outst], series="observed (test data)") +
   ggtitle("Forecasts for 3rd Wave Based on Telehealth Diagnoses (14-Day Lag)") +
-  xlab("Date") + ylab("Cases and Predicted Cases")
+  xlab("Date") + ylab(ylab)
 
 # AUTOREGRESSIVE MODELS
 or<-c(2,1,0)
 xreg=tsdf[,xregc]
 xregn=tsdf[,xregnc]
 #arautofit<-auto.arima(tsdf[,"casest"], xreg=tsdf[,c("testst","susp_14t","pt_susp_14t","platform")])
+arfitlm<-arima(tsdf[,outst],xreg=tsdf[,xregc], order=c(0,0,0))
 arfitnull<-arima(tsdf[,outst], xreg=xregn, order=or)
 arfitlag<-arima(tsdf[,outst],xreg=xreg,order=or)
-lrtest(arfitlag,arfitnull) #p-value <0.05 for cases, =0.0015 for deaths
-fcastall=forecast(model=arfitlag,newreg=xreg, newdata=as.data.frame(tsdf))
-forecast(arfitlag, xreg=xreg)
-autoplot(fcastall)
-arfit<-arima(tsdf[,outst],xreg=xreg, order=or)
-fit_all<-forecast(tsdf[,outst],model=arfit,newxreg=xreg)
+lrtest(arfitlag,arfitnull) #p-value <0.05 for cases,=0.0015 for deaths
+
+
+# fcastall=forecast(model=arfitlag,newreg=xreg, newdata=as.data.frame(tsdf))
+# forecast(arfitlag, xreg=xreg)
+# autoplot(fcastall)
+# arfit<-arima(tsdf[,outst],xreg=xreg, order=or)
+# fit_all<-forecast(tsdf[,outst],model=arfit,newxreg=xreg)
 
 arfitlagtrn<-arima(train[,outst],xreg=train[, xregc],order=or)
 fit2 <- Arima(test[,outst], model=arfitlagtrn, xreg=test[,xregc])
+
+#  PLOT PREDICTION INTERVALS
+fit<-arfitlag
+upper <- fitted(fit) + 1.96*sqrt(fit$sigma2)
+lower <- fitted(fit) - 1.96*sqrt(fit$sigma2)
+plot(tsdf[,outst], type="n", ylim=range(lower,upper))
+polygon(c(time(tsdf[,outst]),rev(time(tsdf[,outst]))), c(upper,rev(lower)), 
+        col='gray', border=FALSE)
+lines(tsdf[,outst],col="green")
+lines(fitted(fit),col='red')
+#out <- (tsdf[,outst] < lower | tsdf[,outst] > upper)
+#points(time(tsdf[,outst])[out], tsdf[,outst][out], pch=19)
+
+
 arfc<-forecast(fit2, xreg=test[,xregc],newdata=test[,outst])
 autoplot(arfc, series="arima")+
-    #autolayer(tsdf[,"casest"],series="observed") +
+    autolayer(tsdf[,outst],series="observed") +
+    autolayer(arfc$fitted) +
     #autolayer(fcast,series="linear") +
-    #autolayer(test[,"casest"],series="observed") +
+    autolayer(test[,outst],series="observed") +
     #autolayer(tsdf[,"casest"], series="train")  +
   ggtitle("Arima and Linear Forecasts") +
   xlab("Date") + ylab("Cases")
 
 autoplot(arfc, series="forecast") +
-  autolayer(tsdf[,"casest"],series="cases")
+  autolayer(tsdf[,outst],series=outst)
   ggtitle("Forecasts") +
-   xlab("Date") + ylab("Cases")
+   xlab("Date") + ylab(ylab)
 
 # LIKELIHOOD RATIO TEST COMPARING ADDITION OF LAG OF SUSPECTED CASES TO BASIC MODEL
 #resid<-checkresiduals(arfit)
@@ -145,10 +154,9 @@ teststat<- 2*(as.numeric(logLik(arfitlag))-as.numeric(logLik(arfitnull)))
 teststat
 pchisq(teststat, df=1, lower.tail = FALSE ) # p-value = 0.044
 
-
 adf.test(tsdf[,outst])
 adf.test(diff(tsdf[,outst]))
-adf.test(diff(diff(casest)))
+
 checkresiduals(arfit)
 arcast<-forecast(arfitlag,newxreg=xreg,data=as.data.frame(tsdf),newdata=as.data.frame(tsdf))
 arf<-forecast(arfit,h=10)
@@ -158,14 +166,12 @@ arf<-forecast(arfit,h=10)
 xreg <- tsdf[,xregc]
 far2_xreg <- function(x, h, xreg, newxreg) {
  forecast(Arima(x, order=c(2,1,0), xreg=xreg), xreg=newxreg)
-
 }
 
 flm_xreg<-function(x,h,xreg,newxreg){
   forecast(Arima(x,order=c(0,0,0),xreg=xreg),xreg=newxreg)
 }
 e<-tsCV(tsdf[,outst],farl_xreg,h=14,xreg=xreg)
-
 
 #xreg <-tsdf[,c("testst","date")]
 e <- tsCV(tsdf[,outst], far2_xreg, h=14, xreg=xreg)
@@ -177,54 +183,8 @@ rmse <-colMeans(e, na.rm=T)
 data.frame(h = 1:14, MSE = mse) %>%
   ggplot(aes(x = h, y = MSE)) + geom_point()
 
-
-
-
-
-
-
-
-
-
-deathsts<-as.ts(sdat$MA_New_wt_Deaths) 
-teststs<-as.ts(sdat$MA_New_wt_Tests)
-suspts<-as.ts(sdat$dx_suspected_7dra)
-tposts<-as.ts(sdat$MA_New_wt_Confirmed/sdat$MA_New_wt_Tests)
-cases<-sdat$MA_New_wt_Confirmed
-deaths<-sdat$MA_New_wt_Deaths
-tests<-sdat$MA_New_wt_Tests
-susp<-sdat$dx_suspected_7dra
-tpos<-sdat$MA_New_wt_Confirmed/sdat$MA_New_wt_Tests
-datecatts<-as.ts(datecat)
-plot<-ts.intersect(casests,deathsts,teststs,suspts)
-susp_14<-as.ts(stats::lag(suspts,-14))
-#set up the autoregression matrix
-xmat<-cbind(
-  casests,
-  susp=suspts,
-  datecatts,
-  teststs,
-  susp_8=stats::lag(suspts,-8),
-  susp_14=stats::lag(suspts,-14),
-  dtcatsusp_14=datecatts*(stats::lag(suspts,-14))
-)
-
-xts<-as.data.frame(ts.intersect(date,ts(casests),ts(suspts),ts(datecatts),ts(teststs),ts(stats::lag(suspts,-14))))
-rows<-c(15:nrow(xmat))
-ar<-c(0,1,1)
-clms<-c("teststs","susp_14")
-arbase<-arima(casests[rows],xreg=xmat[rows,clms],order=ar)
-arsusp<-arima(casests[rows],xreg=xmat[rows,2:4], order=ar)
-arlag<-arima(casests[rows],xreg=xmat[rows,2:6],order=ar)
-arlagi<-arma(casests[rows],xreg=xmat[rows,2:7], order=ar)
-lmlag<-tslm(xts[,"casests"]~xts[,"teststs"]+as.factor(xts[,"datecatts"])*xts[,"susp_14"])
-lmlag<-tslm(tsdf$casests~tsdf$susp_14+tsdf$teststs,data=tsdf)
-
-
 flmlag<-forecast(lmlag)
 autoplot(flmlag)
-
-
 accuracy(arlag)
 
 an<-auto.arima(casests[rows], trace=TRUE)
