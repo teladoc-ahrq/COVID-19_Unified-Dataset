@@ -1,4 +1,5 @@
- options(repos = c(CRAN = "http://cran.rstudio.com"))
+if(TRUE){ #  all preparatory items 
+options(repos = c(CRAN = "http://cran.rstudio.com"))
 # RUN ../AHRQ-C19-DataPrep.r tot creaet TDHU data set
 
 dfile<-"~/teladoc-ahrq/teladoc-prv/TDJHU"
@@ -11,11 +12,12 @@ library(forecast)
 library(ggplot2)
 library(ggfortify)
 library("segmented")
-library(lmtest)
+library(lmtest) #
 #install.packages("MLmetrics","ggpubr")
 library("ggpubr")
 library("MLmetrics")
 library("lubridate")
+library("zoo")
 
 
 #dev.off()
@@ -38,6 +40,8 @@ ARFm=list()
 
 ARFa=list()
 #for(tlag in c(1:30)){ #optimizing lag values
+}
+if(TRUE){
 tlag<-14
 tsdf<- 
   #as.data.frame(
@@ -57,6 +61,7 @@ tsdf<-
     suspt=ts(sdat$dx_suspected_7dra,start=c(2020,stdt), frequency=365),
     cncrn_14=stats::lag(ts(sdat$COVID_CONCERNS_7dra,start=c(2020,stdt),frequency = 365),-14),
     susp_14t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-1*tlag),
+    susp_28t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-1*28),
     deaths_14t=stats::lag(ts(sdat$MA_New_wt_Deaths,start=c(2020,stdt), frequency=365),-1*tlag),
     cases_14t=stats::lag(ts(sdat$MA_New_wt_Confirmed,start=c(2020,stdt),frequency=365),-1*tlag),
     cases_15t=stats::lag(ts(sdat$MA_New_wt_Confirmed,start=c(2020,stdt),frequency=365),-1*(tlag+1)),
@@ -67,12 +72,12 @@ tsdf<-
     deaths_15tu=stats::lag(ts(sdat$MA_New_uw_Deaths,start=c(2020,stdt),frequency=365),-1*(tlag+1)),
     cases_1t=stats::lag(ts(sdat$MA_New_wt_Confirmed,start=c(2020,stdt),frequency = 365),-1),
     deathst_1t=stats::lag(ts(sdat$MA_New_wt_Deaths,start=c(2020,stdt),frequency = 365),-1),
-    susp_4t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-4),
-    susp_30t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-30),
+    susp_7t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-7),
+    #susp_30t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-30),
     pt_susp_14t=platform* stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-14)
     #)
 )
-
+} # end data setup
 
 #ts.plot(tsdf[,"suspt"])
 # OUTCOME OF INTEREST
@@ -80,39 +85,40 @@ tsdf<-
 #outst<-"casest"
 #outst<-"deathst"
 #run deaths first so that plots order correctly
-xregc<-c("susp_14t")
+xregc<-c("susp_28t", "susp_14t","susp_7t")
 #xregc<-c("suspt")
-
-
-if(outst=="casesuw"){
-  lmlags<-c("cases_14tu","cases_15tu")
-  #lmlags<-c("casest","cases_1t")
+if(outst=="casesuw"){ #[1] "Ex Ante Full AR MAPE = 26.53%    |    Ex Ante Null AR MAPE = 27.58%    |    "
+#if(outst=="casest"){ #[1] "Ex Ante Full AR MAPE = 32.1%    |    Ex Ante Null AR MAPE = 33.78%    |    "
+  #lmlags<-c("cases_14tu","cases_15tu")
+  lmlags<-c("casest","cases_1t")
   xregnc<-"testst"
-  xregnc<-c("testsuw")
+  xregnc<-c()
+  #xregnc<-c("testsuw")
   ylab<-"Cases"
   serieslab<-"Cases"
   coeft<-"susp_14t"
-  #outst<-"casesuw"
+  #coeft<-"xreg"
   #tsdf[,outst]<-tsdf[,"f14_casest"]
 }
-
-if(outst=="deathsuw"){
+#if(outst=="deathst"){ #[1] "Ex Ante Full AR MAPE = 29.99%    |    Ex Ante Null AR MAPE = 34.6%    |    "
+if(outst=="deathsuw"){ #[1] "Ex Ante Full AR MAPE = 26.74%    |    Ex Ante Null AR MAPE = 30.4%    |    "
+  
   plotlist<-list()
   fitlist<-list()
   tabout<-list()
   xregnc<-c()
   lmlags<-c("deaths_14t","deaths_15t")
-  lmlags<-c("deaths_14tu","deaths_15tu")
+  #lmlags<-c("deaths_14tu","deaths_15tu")
   ylab<-"Deaths"
   serieslab<-"Deaths"
-  #outst<-"deathsuw"
   grord<-14
   coeft<-"susp_14t"
-  coeft<-"xreg"
+  #coeft<-"xreg"
   #coeft<-"suspt"
   #tsdf[,outst]<-tsdf[,"f14_deathst"]
+
 }
-  
+
 xreglmnull<-union(xregnc,lmlags)
 xreglm<-union(xreglmnull,xregc)
 xregc<-union(xregc,xregnc) 
@@ -123,7 +129,6 @@ xregc<-union(xregc,xregnc)
 ##ARFa<-rbind(ARFa,a$aic)
 ##} myend
 
-
 train<-window(tsdf,start=c(2020,stdt),end=c(2020,stdt+255))
 test<-window(tsdf,start=c(2020,stdt+256))
 
@@ -133,20 +138,10 @@ lmfit<-tslm(data=tsdf,tsdf[,outst]~tsdf[,xreglm]+0+trend) #same results as LM
 lm_adj_r2<-summary(lmfit)$adj.r.squared
 lm_mape<-MAPE(lmfit$x,lmfit$fitted)
 
-
-
-tabout[[outst]]$lm_adj_ar2<-lm_adj_r2
-tabout[[outst]]$lm_mape<-lm_mape
-tabout[[outst]]$mean<-mean(tsdf[,outst],na.rm=T)
-tabout[[outst]]$sd<-sd(tsdf[,outst],na.rm=T)
-
 lmpred<-predict(lmfit,xreg=tsdf[,xregc],newdata=tsdf[,outst],interval="confidence")
-# autoplot(predict(lmfit), prediction.interval=TRUE)
-# ggplot2::fortify(lmfit$x)
 lrtest(lmnull,lmfit)
-
 AIC(lmfit)
-fclmfit<-forecast(lmfit,newdata=as.data.frame(tsdf))
+#fclmfit<-forecast(lmfit,newdata=as.data.frame(tsdf[200,]),newxreg=tsdf[200,xreglm])
 mdf<-(abs(lmfit$x-lmfit$fitted)/lmfit$x)
 mape<-mean(mdf[is.finite(mdf)])*100
 
@@ -185,122 +180,160 @@ autoplot(fcast,series="forecast") +
 
 
 # AUTOREGRESSIVE MODELS
-or<-c(2,1,0)
+or<-c(1,1,0)
 #arautofit<-auto.arima(tsdf[,"casest"], xreg=tsdf[,c("testst","susp_14t","pt_susp_14t","platform")])
 #arfitlm<-Arima(tsdf[,outst],xreg=tsdf[,xregc], order=c(0,0,0))
 arfitlag<-Arima(tsdf[,outst],xreg=tsdf[,xregc], order=or,include.drift=T)
 coef_p<-coeftest(arfitlag)[coeft,"Pr(>|z|)"]
 model_mape<-MAPE(arfitlag$x, arfitlag$fitted)
-
-
 #mod_mape<-MAPE(arfilag$x, fitted(arfitlag))
 # A SUBSTITUTE FOR R2
 ar_rsq<-cor(fitted(arfitlag),tsdf[,outst])^2
 
+nullxreg=tsdf[,xregnc]
 if(is.null(xregnc)){
-  arfitnull<-Arima(tsdf[,outst],order=or,include.drift=T)
-} else{
-  arfitnull<-Arima(tsdf[,outst], xreg=tsdf[,xregnc], order=or,include.drift=T)
+ nullxreg=NULL 
 }
-lrtar<-lrtest(arfitlag,arfitnull) #p-value <0.05 for cases,=0.0015 for deaths
-lrtpv<-round(lrtar$`Pr(>Chisq)`[2],digits=3)
-comp_mape<-round(MAPE(arfitnull$x,arfitnull$fitted)-model_mape,digits=2)
+arfitnull<-Arima(tsdf[,outst], xreg=NULL, order=or,include.drift=T)
+nullmape<-MAPE(arfitnull$x,arfitnull$fitted)
+#lrtar<-lrtest(arfitlag,arfitnull) #p-value <0.05 for cases,=0.0015 for deaths
+#lrtpv<-round(lrtar$`Pr(>Chisq)`[2],digits=3)
+comp_mape<-round(nullmape-model_mape,digits=2)
+ratio_mape<-comp_mape/nullmape
 #  FOR SOME REASON REWEIGHTED MODEL DOES NOT CONVERGE
 #arfitlm<-Arima(tsdf[,outst], order=c(0,0,0),xreg=tsdf[,xregc])
 
-far2_xreg <- function(x, h, xreg, newxreg) {
- forecast(Arima(x, order=c(2,1,0), xreg=xreg,include.drift=T), xreg=newxreg)
-  
- # forecast(tslm(x, xreg=xreg),xreg=newxreg)
+far2_xreg <- function(x, h,  xreg,newxreg,order) {
+ #forecast(Arima(x, order=order, xreg=xreg,include.drift=T), xreg=newxreg)
+  if(!is.null(xreg)){
+    forecast(Arima(x, order=c(1,1,0), xreg=xreg,include.drift=T), xreg=newxreg)
+  } else {
+    forecast(Arima(x, order=c(1,1,0), include.drift=T), h=h, xreg=NULL)
+  }
 }
-
-
+far_null<-function(x,h,order){
+  forecast(Arima(x, order=c(1,1,0), include.drift=T),h=h)
+}
+far2_xregl <- function(x, h, xreg, newxreg=NULL,tlag=NULL) {
+  y=x[1:(length(x)-tlag)]
+  if(!is.null(xreg)){
+    xreg=xreg[1:(nrow(xreg)-tlag),]
+    forecast(Arima(y, order=c(2,1,0), xreg=xreg,include.drift=T), xreg=newxreg)
+  } else {
+    forecast(Arima(y, order=c(2,1,0), include.drift=T),h=h)
+  }
+}
 flm_xreg<-function(x,h,xreg,newxreg){
-
   forecast(Arima(x,order=c(0,0,0),xreg=xreg,include.drift=T),xreg=newxreg)
 }
 
-
 # TIME SERIES CROSS VALIDATION - PREDICTIONS 1 to h- timesteps into the future
 # LINEAR MODEL USING ONLY LAGGED PREDICTORS
-e<-tsCV(tsdf[,outst],flm_xreg,h=14,xreg=tsdf[,xregc],initial=0, window=30)
-enull<-tsCV(tsdf[,outst],flm_xreg,h=14,xreg=tsdf[,xreglmnull],initial=0,window=30)
+win<-60
+init=60
+hc<-30
+e<-tsCV(tsdf[,outst],far2_xreg,h=hc, xreg=tsdf[,xregc],window=win,initial=init,order=or)
+#enull<-tsCV(tsdf[,outst],far0_xreg,h=7)
+if(is.null(nullxreg)){
+  enull<-tsCV(tsdf[,outst],far_null,h=hc,xreg=nullxreg,window=win,initial=init,order=or)
+  #enull<-tsCV(tsdf[,outst],far2_xreg,h=hc, xreg=NULL,initial=0, window=win,newxreg=NULL)
+} else{
+  enull<-tsCV(tsdf[,outst],far2_xreg,h=hc, xreg=tsdf[,xregnc],initial=init, window=win,lag=tlag,order=or)
+}
+# if(is.null(xregnc)){
+#   #enull<-tscv_win(tsdf[,outst],far0_xreg,h=14,initial=0,window=30,winend=0)
+#   enull<-tsCV(tsdf[,outst],far0_xreg,h=7,initial=0, window=30)
+# }
 #e <- tsCV(tsdf[,outst], far2_xreg, h=14, xreg=tsdf[,xregc], initial=30, window=30)
 #e<-tsCV(tsdf[,outst],far2_xreg,h=14, xreg=tsdf[,xregnc],initial=30)
 fit<-arfitlag
 fitnull<-arfitnull
 
-
+getfit<-function(e,fit,h){
+  fmat<-ts.intersect(error=e[,h],ref=fit$x,fore14=fit$x-e[,h],abserr=abs(e[,h]))
+  ind<-!is.na(fmat[,"fore14"])
+  tscv_abspct<-abs(fmat[,"error"]/fmat[,"ref"])
+  tscv_mse <- colMeans(e^2, na.rm = T)
+  #tscv_mape<-100*(colMeans(tscv_abspct,na.rm=T))
+  ind<-!is.na(fmat[,"fore14"])
+  out<- data.frame(
+    mape=MAPE(fmat[ind,"fore14"],fmat[ind,"ref"]) ,
+    fore14=fore14<-fmat[,"fore14"],
+    cor=cor(fore14[!is.na(fore14)],fit$x[!is.na(fore14)])^2
+  )
+  return(out)
+  
+}
 # if using only 14-day lagged regressors (as in TSLM), set h=1 for cross validation
 # if using autoregressive terms, regressors are L1 and L2, set h=14
+h<-14
+arfitstats<-getfit(e=e,fit=fit,h=h)
+nullfitstats<-getfit(e=enull,fit=fitnull,h=h)
 # h<-14
-h<-1
-fmat<-ts.intersect(error=e[,h],ref=fit$x, fore14=fit$x-e[,h],abserr=abs(e[,h]))
-fmatnull<-ts.intersect(error=enull[,h],ref=fit$x,fore14null=fitnull$x-enull[,h], abserr=abs(enull[,h]))
-#fmat<-ts.intersect( ref=fit$x, fore14=fit$x-e[,h])
-ind<-!is.na(fmat[,"fore14"])
-fore14<-fmat[,"fore14"]
-MAPE(fmat[ind,"fore14"],fmat[ind,"ref"])
-ma_fore14<-#moving average of last 7 days for each data point
-cor(fore14[!is.na(fore14)],fit$x[!is.na(fore14)])^2
-
-fclist<-list()
-fclist[outst]<-fore14
-tscv_abspct<-abs(fmat[,"error"]/fmat[,"ref"])
-tscv_mse <- colMeans(e^2, na.rm = T)
-#tscv_mape<-100*(colMeans(tscv_abspct,na.rm=T))
-mape<-mean(tscv_abspct,na.rm=T) 
-
-rmse <-colMeans(e, na.rm=T)
-# Plot the MSE values against the forecast horizon
+#fmat<-ts.intersect(error=e[,h],ref=fit$x, fore14=fit$x-e[,h],abserr=abs(e[,h]))
 gr<-grangertest(tsdf[,outst] ~ tsdf[,"suspt"], order = grord)
 granger_p<-round(gr[2,4],digits=3)
 
+# setting up content for plots/results
+if(TRUE){
 # data.frame(h = 1:14, MSE = mse)
-label<-paste0("Ex post AR MAPE = ",100*round(model_mape,digits=4),"%    |    ")
-label<-paste0(label,"\nEx ante LM MAPE rolling window (",h,"-Day) = ",100*round(mape,digits=4),"%\n")
-label<-paste0(label, "AR Model Coefficient: ", round(arfitlag$coef[coeft],digits=1)," (p<",round(coef_p,digits=4), ")\n")
+label<-paste0("Ex Ante Full AR MAPE = ",100*round(mean(arfitstats$mape),digits=4),"%    |    ")
+label<-paste0(label, "Ex Ante Null AR MAPE = ",100*round(mean(nullfitstats$mape),digits=4),"%    |    ")
+#label<-paste0(label,"\n Ex ante LM MAPE rolling window (",h,"-Day) = ",100*round(mape,digits=4),"%\n")
+#label<-paste0(label, "AR Model Coefficient: ", round(arfitlag$coef[coeft],digits=1)," (p<",round(coef_p,digits=4), ")\n")
 #label<-paste0(label,"14 Day MSE = ", round(tscv_mse[14],digits=2),"    |    ")
-label<-paste0(label,"LRT (vs. no TH data) MAPE DIFF ", comp_mape, " p<",lrtpv,"\n")
-label<-paste0(label, "LM: Adjusted R-squared "  ,round(lm_adj_r2,digits=2),", ")
-label<-paste0(label, "MAPE = ", 100*round(lm_mape,digits=2),"\n")
+#label<-paste0(label,"LRT (vs. no TH data) MAPE DIFF ", comp_mape, " p<",lrtpv,"\n")
+#label<-paste0(label, "LM: Adjusted R-squared "  ,round(lm_adj_r2,digits=2),", ")
+#label<-paste0(label, "MAPE = ", 100*round(lm_mape,digits=2),"\n")
 
  #label<-paste0(label, "non-causality p<",granger_p)
 fit$label<-label
 fit$upper <- fitted(fit) + 1.96*sqrt(fit$sigma2)
 fit$lower <- fitted(fit) - 1.96*sqrt(fit$sigma2)
-fit$fore14 <-fore14
+fit$fore14 <-arfitstats$fore14
+fit$fore14s<-rollmean(arfitstats$fore14,7,fill=NA)
+fit$fore14sup<-fit$fore14s+(1.96*rollapply(arfitstats$fore14,width=7,by=1,sd))
+fit$fore14slo<-fit$fore14s-(1.96*rollapply(arfitstats$fore14,width=7,by=1,sd))
+fit$fore14_null<-nullfitstats$fore14
+fit$fore14_nulls<-rollmean(nullfitstats$fore14,7,fill=NA)
 fit$date<-as.Date(date_decimal(as.numeric(time(fit$x)))) 
 fit$ypos<-max(fit$x)*.85
 fit$mean<-mean(fit$x)
 fit$sd<-sd(fit$x)
-fit$mape<-mape
-fit$nullmape<-nullmape
+fit$mape<-mean(arfitstats$mape)
+fit$nullmape<-mean(nullfitstats$mape)
 fit$model_mape<-model_mape
 fit$n<-length(fit$x[!is.na(fit$x)])
 # plot data has to be stored or it will be overwritten
-
+}
 
 fitlist[[outst]]<-fit
-
-#rm(fit)
 
 # IMPORTANT for ggplot and other tidylazy evaluations
 # IF YOU WANT TO OVERRIDE LAZY EVALUATION FUNCTIONS YOU MUST
 # USE !!outst and not outst. Otherwise the combined plots will not render
 # the original data, it will just render the current value of outst
 # this took you 3+ hours to figure out
+
+if(TRUE){
   
 plotlist[[outst]]<-
   #ggplot(aes(x=time(fitlist[[!!outst]]$x)),data=NULL) +
   ggplot(aes(x=fitlist[[!!outst]]$date),data=NULL) +
   
- geom_point(aes(y=fitlist[[!!outst]]$fore14,colour="Ex Ante"),alpha=0.3)+
+  #geom_point(aes(y=fitlist[[!!outst]]$fore14,colour="Full"),alpha=0.3)+
               ylab(ylab)+
+  #geom_point(aes(y=fitlist[[!!outst]]$fore14_null,colour="Null"),alpha=0.6)+
+  
+  geom_line(aes(y=fitlist[[!!outst]]$fore14s,colour="Full"),linetype=1)+
+  ylab(ylab)+
+  geom_line(aes(y=fitlist[[!!outst]]$fore14_nulls,colour="Null"),linetype=1)+
+  ylab(ylab)+
+  
   geom_ribbon(aes(ymin=fitlist[[!!outst]]$lower,ymax=fitlist[[!!outst]]$upper), fill="darkorange3", alpha=0.2) +
   geom_line(aes(y=fitted(fitlist[[!!outst]]),colour="Ex Post"))+
   
-    geom_line(aes(y=fitlist[[!!outst]]$x,colour="Observed"),linetype=2)+
+  geom_line(aes(y=fitlist[[!!outst]]$x,colour="Observed"),linetype=2)+
  
   #geom_line(aes(y=100*tsdf[,"susp_14t"]))+
   geom_text(aes(hjust=0, x=mean(fitlist[[!!outst]]$date)-40,y= fitlist[[!!outst]]$ypos,label=fitlist[[!!outst]]$label)) +
@@ -309,7 +342,8 @@ plotlist[[outst]]<-
   #scale_x_date(c(start(fit$x),end(fit$x)), date_labels =  "%b %Y") +
   scale_color_manual(name = "", 
                      values = c("Ex Post" = "darkorange3", "Observed" = "darkslategray", 
-                                "Ex Ante" = "darkorange3"))+
+                                "Ex Ante" = "darkorange3","Full"="red","Null"="green")
+                                )+
   theme(axis.title.x = element_blank())+
   theme(axis.ticks.x = element_blank(),
   axis.text.x = element_blank())
@@ -330,8 +364,9 @@ plotlist[["reference"]]<-
 
 
 #ggarrange(plotlist=plotlist[c("reference","casest","deathst")],ncol=1,common.legend = T, align="v",legend="bottom")
-#ggarrange(plotlist=plotlist[c("casesuw","deathsuw","reference")],ncol=1,common.legend= T, legend="bottom", align="v")
+ggarrange(plotlist=plotlist[c("casesuw","deathsuw","reference")],ncol=1,common.legend= T, legend="bottom", align="v")
 save.image("~/teladoc-ahrq/TD-US-Surveillance.RData")
+}
 myend
 
 if(false){
@@ -360,7 +395,6 @@ refdata<-data.frame(
   date=tsdf[,"date"]
 )
 }
-
 # LIKELIHOOD RATIO TEST COMPARING ADDITION OF LAG OF SUSPECTED CASES TO BASIC MODEL
 #resid<-checkresiduals(arfit)
 teststat<- 2*(as.numeric(logLik(arfitlag))-as.numeric(logLik(arfitnull)))
