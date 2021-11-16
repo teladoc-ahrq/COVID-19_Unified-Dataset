@@ -19,16 +19,13 @@ library("MLmetrics")
 library("lubridate")
 library("zoo")
 
-
 #dev.off()
-
 sdat<-read_csv(dfile)
 
 # CORRECTIONS S.T. WEIGHTED CASES/DEATHS/TESTS SO THAT SUM OF CASES OVER TIME MATCHES UNWEIGHTED VALUES
 sdat$rw_case=sum(sdat$MA_New_uw_Confirmed)/sum(sdat$MA_New_wt_Confirmed)
 sdat$rw_tests=sum(sdat$MA_New_uw_Tests)/sum(sdat$MA_New_wt_Tests)
 sdat$rw_deaths=sum(sdat$MA_New_uw_Deaths)/sum(sdat$MA_New_wt_Deaths)
-
 
 date<-as.Date(sdat$Date)
 #  cut date into quarters for ggplot
@@ -37,7 +34,6 @@ platform<-date==as.Date("2020-03-13")
 stdt<-as.numeric(format(date[1],"%j"))
 
 ARFm=list()
-
 ARFa=list()
 #for(tlag in c(1:30)){ #optimizing lag values
 }
@@ -50,9 +46,10 @@ tsdf<-
     date=ts(date,start=c(2020,stdt), frequency=365),
     dcat=ts(datecat,start=c(2020,stdt),frequency=365),
     casest=ts(sdat$MA_New_wt_Confirmed*sdat$rw_case,start=c(2020, stdt),frequency=365),
+    #casest=ts((sdat$MA_New_wt_Confirmed*sdat$rw_case)/(sdat$MA_New_wt_Tests*sdat$rw_tests),start=c(2020, stdt),frequency=365),
     casesuw=ts(sdat$MA_New_uw_Confirmed,start=c(2020,stdt),frequency=365),
-    f14_casest=stats::lag(ts(sdat$MA_New_wt_Confirmed*sdat$rw_case, start=c(2020,stdt),frequency = 365),14),
-    f14_deathst=stats::lag(ts(sdat$MA_New_wt_Deaths*sdat$rw_deaths,start=c(2020,stdt),frequency=365),14),
+    #f14_casest=stats::lag(ts(sdat$MA_New_wt_Confirmed*sdat$rw_case, start=c(2020,stdt),frequency = 365),14),
+    #f14_deathst=stats::lag(ts(sdat$MA_New_wt_Deaths*sdat$rw_deaths,start=c(2020,stdt),frequency=365),14),
     testst=ts(sdat$MA_New_wt_Tests*sdat$rw_tests,start=c(2020,stdt), frequency=365),
     tests_14t=stats::lag(ts(sdat$MA_New_wt_Tests*sdat$rw_tests,start=c(2020,stdt),frequency=365),-14),
     deathst=ts(sdat$MA_New_wt_Deaths*sdat$rw_deaths,start=c(2020,stdt), frequency=365),
@@ -61,6 +58,7 @@ tsdf<-
     suspt=ts(sdat$dx_suspected_7dra,start=c(2020,stdt), frequency=365),
     cncrn_14=stats::lag(ts(sdat$COVID_CONCERNS_7dra,start=c(2020,stdt),frequency = 365),-14),
     susp_14t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-1*tlag),
+    susp_21t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-1*21),
     susp_28t=stats::lag(ts(sdat$dx_suspected_7dra,start=c(2020,stdt),frequency=365),-1*28),
     deaths_14t=stats::lag(ts(sdat$MA_New_wt_Deaths,start=c(2020,stdt), frequency=365),-1*tlag),
     cases_14t=stats::lag(ts(sdat$MA_New_wt_Confirmed,start=c(2020,stdt),frequency=365),-1*tlag),
@@ -85,14 +83,17 @@ tsdf<-
 #outst<-"casest"
 #outst<-"deathst"
 #run deaths first so that plots order correctly
-xregc<-c("susp_28t", "susp_14t","susp_7t")
+#xregc<-c("susp_28t", "susp_21t", "susp_14t")
+xregc<-c("susp_14t","susp_28t")
+#xregc<-c("susp_14t")
 #xregc<-c("suspt")
-if(outst=="casesuw"){ #[1] "Ex Ante Full AR MAPE = 26.53%    |    Ex Ante Null AR MAPE = 27.58%    |    "
+if(outst=="casest"){ #[1] "Ex Ante Full AR MAPE = 26.53%    |    Ex Ante Null AR MAPE = 27.58%    |    "
 #if(outst=="casest"){ #[1] "Ex Ante Full AR MAPE = 32.1%    |    Ex Ante Null AR MAPE = 33.78%    |    "
   #lmlags<-c("cases_14tu","cases_15tu")
+  tscale<-5000
   lmlags<-c("casest","cases_1t")
   xregnc<-"testst"
-  xregnc<-c()
+  xregnc<-c("testst")
   #xregnc<-c("testsuw")
   ylab<-"Cases"
   serieslab<-"Cases"
@@ -101,9 +102,10 @@ if(outst=="casesuw"){ #[1] "Ex Ante Full AR MAPE = 26.53%    |    Ex Ante Null A
   #tsdf[,outst]<-tsdf[,"f14_casest"]
 }
 #if(outst=="deathst"){ #[1] "Ex Ante Full AR MAPE = 29.99%    |    Ex Ante Null AR MAPE = 34.6%    |    "
-if(outst=="deathsuw"){ #[1] "Ex Ante Full AR MAPE = 26.74%    |    Ex Ante Null AR MAPE = 30.4%    |    "
-  
+if(outst=="deathst"){ #[1] "Ex Ante Full AR MAPE = 26.74%    |    Ex Ante Null AR MAPE = 30.4%    |    "
+  tscale<-50
   plotlist<-list()
+  plotlist2<-list()
   fitlist<-list()
   tabout<-list()
   xregnc<-c()
@@ -118,7 +120,11 @@ if(outst=="deathsuw"){ #[1] "Ex Ante Full AR MAPE = 26.74%    |    Ex Ante Null 
   #tsdf[,outst]<-tsdf[,"f14_deathst"]
 
 }
-
+if(length(xregc)==1){
+  coeft<-"xreg"
+} else {
+coeft<-"susp_14t"
+}
 xreglmnull<-union(xregnc,lmlags)
 xreglm<-union(xreglmnull,xregc)
 xregc<-union(xregc,xregnc) 
@@ -180,7 +186,7 @@ autoplot(fcast,series="forecast") +
 
 
 # AUTOREGRESSIVE MODELS
-or<-c(1,1,0)
+or<-c(2,1,0)
 #arautofit<-auto.arima(tsdf[,"casest"], xreg=tsdf[,c("testst","susp_14t","pt_susp_14t","platform")])
 #arfitlm<-Arima(tsdf[,outst],xreg=tsdf[,xregc], order=c(0,0,0))
 arfitlag<-Arima(tsdf[,outst],xreg=tsdf[,xregc], order=or,include.drift=T)
@@ -206,22 +212,13 @@ ratio_mape<-comp_mape/nullmape
 far2_xreg <- function(x, h,  xreg,newxreg,order) {
  #forecast(Arima(x, order=order, xreg=xreg,include.drift=T), xreg=newxreg)
   if(!is.null(xreg)){
-    forecast(Arima(x, order=c(1,1,0), xreg=xreg,include.drift=T), xreg=newxreg)
+    forecast(Arima(x, order=c(2,1,0), xreg=xreg,include.drift=T), xreg=newxreg)
   } else {
-    forecast(Arima(x, order=c(1,1,0), include.drift=T), h=h, xreg=NULL)
+    forecast(Arima(x, order=c(2,1,0), include.drift=T), h=h, xreg=NULL)
   }
 }
 far_null<-function(x,h,order){
-  forecast(Arima(x, order=c(1,1,0), include.drift=T),h=h)
-}
-far2_xregl <- function(x, h, xreg, newxreg=NULL,tlag=NULL) {
-  y=x[1:(length(x)-tlag)]
-  if(!is.null(xreg)){
-    xreg=xreg[1:(nrow(xreg)-tlag),]
-    forecast(Arima(y, order=c(2,1,0), xreg=xreg,include.drift=T), xreg=newxreg)
-  } else {
-    forecast(Arima(y, order=c(2,1,0), include.drift=T),h=h)
-  }
+  forecast(Arima(x, order=c(2,1,0), include.drift=T),h=h)
 }
 flm_xreg<-function(x,h,xreg,newxreg){
   forecast(Arima(x,order=c(0,0,0),xreg=xreg,include.drift=T),xreg=newxreg)
@@ -230,8 +227,8 @@ flm_xreg<-function(x,h,xreg,newxreg){
 # TIME SERIES CROSS VALIDATION - PREDICTIONS 1 to h- timesteps into the future
 # LINEAR MODEL USING ONLY LAGGED PREDICTORS
 win<-60
-init=60
-hc<-30
+init<-7
+hc<-14
 e<-tsCV(tsdf[,outst],far2_xreg,h=hc, xreg=tsdf[,xregc],window=win,initial=init,order=or)
 #enull<-tsCV(tsdf[,outst],far0_xreg,h=7)
 if(is.null(nullxreg)){
@@ -240,17 +237,19 @@ if(is.null(nullxreg)){
 } else{
   enull<-tsCV(tsdf[,outst],far2_xreg,h=hc, xreg=tsdf[,xregnc],initial=init, window=win,lag=tlag,order=or)
 }
-# if(is.null(xregnc)){
-#   #enull<-tscv_win(tsdf[,outst],far0_xreg,h=14,initial=0,window=30,winend=0)
-#   enull<-tsCV(tsdf[,outst],far0_xreg,h=7,initial=0, window=30)
-# }
-#e <- tsCV(tsdf[,outst], far2_xreg, h=14, xreg=tsdf[,xregc], initial=30, window=30)
-#e<-tsCV(tsdf[,outst],far2_xreg,h=14, xreg=tsdf[,xregnc],initial=30)
+
+#diebold-marino
+dm<-list()
+for(i in 1:hc){
+  ind<-!is.na(enull[,14]) & !is.na(e[,14])
+  dm[[i]]<-dm.test(enull[ind,i],e[ind,i],h=i,alternative="greater",power=1)$p.value
+}
+dm
 fit<-arfitlag
 fitnull<-arfitnull
 
 getfit<-function(e,fit,h){
-  fmat<-ts.intersect(error=e[,h],ref=fit$x,fore14=fit$x-e[,h],abserr=abs(e[,h]))
+  fmat<-ts.union(error=e[,h],ref=fit$x,fore14=fit$x-e[,h],abserr=abs(e[,h]))
   ind<-!is.na(fmat[,"fore14"])
   tscv_abspct<-abs(fmat[,"error"]/fmat[,"ref"])
   tscv_mse <- colMeans(e^2, na.rm = T)
@@ -262,13 +261,14 @@ getfit<-function(e,fit,h){
     cor=cor(fore14[!is.na(fore14)],fit$x[!is.na(fore14)])^2
   )
   return(out)
-  
 }
 # if using only 14-day lagged regressors (as in TSLM), set h=1 for cross validation
 # if using autoregressive terms, regressors are L1 and L2, set h=14
 h<-14
 arfitstats<-getfit(e=e,fit=fit,h=h)
+mse <- colMeans(e^2, na.rm = T)
 nullfitstats<-getfit(e=enull,fit=fitnull,h=h)
+nullmse <- colMeans(enull^2, na.rm = T)
 # h<-14
 #fmat<-ts.intersect(error=e[,h],ref=fit$x, fore14=fit$x-e[,h],abserr=abs(e[,h]))
 gr<-grangertest(tsdf[,outst] ~ tsdf[,"suspt"], order = grord)
@@ -277,16 +277,18 @@ granger_p<-round(gr[2,4],digits=3)
 # setting up content for plots/results
 if(TRUE){
 # data.frame(h = 1:14, MSE = mse)
-label<-paste0("Ex Ante Full AR MAPE = ",100*round(mean(arfitstats$mape),digits=4),"%    |    ")
-label<-paste0(label, "Ex Ante Null AR MAPE = ",100*round(mean(nullfitstats$mape),digits=4),"%    |    ")
+#label<-paste0(outst,"-", init,"-",win, 
+label<-paste0("AR MAPE14 = ",100*round(mean(arfitstats$mape),digits=4),"% | ")
+label<-paste0(label, "| Null AR MAPE14 = ",100*round(mean(nullfitstats$mape),digits=4),"%  ")
+#label<-paste0(label,"\nNull vs. Full p=", round(t.test(abs(enull[,h]),abs(e[,h]))$p.value,digits=4))
+label<-paste0(label,"| Null vs. Full Diebold-Mariano p=", round(dm[[14]],digits=4))
 #label<-paste0(label,"\n Ex ante LM MAPE rolling window (",h,"-Day) = ",100*round(mape,digits=4),"%\n")
 #label<-paste0(label, "AR Model Coefficient: ", round(arfitlag$coef[coeft],digits=1)," (p<",round(coef_p,digits=4), ")\n")
 #label<-paste0(label,"14 Day MSE = ", round(tscv_mse[14],digits=2),"    |    ")
 #label<-paste0(label,"LRT (vs. no TH data) MAPE DIFF ", comp_mape, " p<",lrtpv,"\n")
 #label<-paste0(label, "LM: Adjusted R-squared "  ,round(lm_adj_r2,digits=2),", ")
 #label<-paste0(label, "MAPE = ", 100*round(lm_mape,digits=2),"\n")
-
- #label<-paste0(label, "non-causality p<",granger_p)
+#label<-paste0(label, "non-causality p<",granger_p)
 fit$label<-label
 fit$upper <- fitted(fit) + 1.96*sqrt(fit$sigma2)
 fit$lower <- fitted(fit) - 1.96*sqrt(fit$sigma2)
@@ -295,7 +297,7 @@ fit$fore14s<-rollmean(arfitstats$fore14,7,fill=NA)
 fit$fore14sup<-fit$fore14s+(1.96*rollapply(arfitstats$fore14,width=7,by=1,sd))
 fit$fore14slo<-fit$fore14s-(1.96*rollapply(arfitstats$fore14,width=7,by=1,sd))
 fit$fore14_null<-nullfitstats$fore14
-fit$fore14_nulls<-rollmean(nullfitstats$fore14,7,fill=NA)
+fit$fore14_nulls<-rollmean(nullfitstats$fore14,3,fill=NA)
 fit$date<-as.Date(date_decimal(as.numeric(time(fit$x)))) 
 fit$ypos<-max(fit$x)*.85
 fit$mean<-mean(fit$x)
@@ -304,10 +306,21 @@ fit$mape<-mean(arfitstats$mape)
 fit$nullmape<-mean(nullfitstats$mape)
 fit$model_mape<-model_mape
 fit$n<-length(fit$x[!is.na(fit$x)])
+fit$mapediff<-(colMeans(abs(enull/fit$x),na.rm=T))-(colMeans(abs(e/fit$x),na.rm=T))
+fit$mapetdiffnull<-(abs(fit$fore14_null-fit$x))/sum(fit$x)
+fit$mapetdifffull<-(abs(fit$fore14-fit$x))/sum(fit$x)
+fit$diffline<-rollmean(fit$mapetdiffnull-fit$mapetdifffull,12,fill=NA)
 # plot data has to be stored or it will be overwritten
 }
 
 fitlist[[outst]]<-fit
+
+plotlist2[[outst]]<-
+  ggplot(aes(x=fitlist[[!!outst]]$date),data=NULL) +
+  geom_line(aes(y=fitlist[[!!outst]]$diffline,colour="Full"),linetype=1,color="black")+
+  geom_hline(aes(yintercept=0))+
+  ylab("")+
+  xlab("")
 
 # IMPORTANT for ggplot and other tidylazy evaluations
 # IF YOU WANT TO OVERRIDE LAZY EVALUATION FUNCTIONS YOU MUST
@@ -316,41 +329,43 @@ fitlist[[outst]]<-fit
 # this took you 3+ hours to figure out
 
 if(TRUE){
-  
+
 plotlist[[outst]]<-
   #ggplot(aes(x=time(fitlist[[!!outst]]$x)),data=NULL) +
   ggplot(aes(x=fitlist[[!!outst]]$date),data=NULL) +
-  
   #geom_point(aes(y=fitlist[[!!outst]]$fore14,colour="Full"),alpha=0.3)+
               ylab(ylab)+
   #geom_point(aes(y=fitlist[[!!outst]]$fore14_null,colour="Null"),alpha=0.6)+
+  geom_area(aes(y=tsdf[,"suspt"]*!!tscale), fill="white")+
+    ylab(ylab)+
+  geom_line(aes(y=fitlist[[!!outst]]$fore14_nulls,colour="Forecast w/o TH"), linetype=2, alpha=.9)+
+  geom_line(aes(y=fitlist[[!!outst]]$fore14s,colour="Forecast with TH"),linetype=2)+
   
-  geom_line(aes(y=fitlist[[!!outst]]$fore14s,colour="Full"),linetype=1)+
   ylab(ylab)+
-  geom_line(aes(y=fitlist[[!!outst]]$fore14_nulls,colour="Null"),linetype=1)+
-  ylab(ylab)+
-  
-  geom_ribbon(aes(ymin=fitlist[[!!outst]]$lower,ymax=fitlist[[!!outst]]$upper), fill="darkorange3", alpha=0.2) +
+  geom_ribbon(aes(ymin=fitlist[[!!outst]]$lower,ymax=fitlist[[!!outst]]$upper), fill="darkslategray", alpha=0.2) +
   geom_line(aes(y=fitted(fitlist[[!!outst]]),colour="Ex Post"))+
-  
-  geom_line(aes(y=fitlist[[!!outst]]$x,colour="Observed"),linetype=2)+
- 
+  geom_line(aes(y=fitlist[[!!outst]]$x,colour="Observed"),linetype=1)+
   #geom_line(aes(y=100*tsdf[,"susp_14t"]))+
-  geom_text(aes(hjust=0, x=mean(fitlist[[!!outst]]$date)-40,y= fitlist[[!!outst]]$ypos,label=fitlist[[!!outst]]$label)) +
+  geom_text(aes(hjust=0, x=mean(fitlist[[!!outst]]$date)-150,y= fitlist[[!!outst]]$ypos,label=fitlist[[!!outst]]$label),size=3) +
   theme(axis.text.y= element_text(angle = 90)) +
-  ylim(0,NA)+
+  #ylim(0,NA)+
   #scale_x_date(c(start(fit$x),end(fit$x)), date_labels =  "%b %Y") +
   scale_color_manual(name = "", 
-                     values = c("Ex Post" = "darkorange3", "Observed" = "darkslategray", 
-                                "Ex Ante" = "darkorange3","Full"="red","Null"="green")
+                     values = c("Ex Post" = "darkslategray", "Observed" = "darkslategray", 
+                                "Ex Ante" = "darkslategray",
+                                "Forecast with TH"="skyblue3","Forecast w/o TH"="firebrick")
                                 )+
+  scale_linetype_manual(name="", values=c("Ex Post" = 1, "Observed" = 1, 
+                                           "Ex Ante" = 1,
+                                           "Forecast with TH"=1,"Forecast w/o TH"=2))+
   theme(axis.title.x = element_blank())+
   theme(axis.ticks.x = element_blank(),
   axis.text.x = element_blank())
 
 plotlist[["reference"]]<-
   #ggplot(aes(x=time(tsdf[,])),data=NULL)+
-  ggplot(aes(x=as.Date(date_decimal(as.numeric(time(tsdf))))),data=NULL)+ 
+  ggplot(aes(x=as.Date(date_decimal(as.numeric(time(tsdf))))),data=NULL)+
+  geom_area(aes(y=fitlist[[!!outst]]$x/5000),fill="white",linetype=1)+
   geom_line(aes(y=tsdf[,"testst"]/30000), colour="darkorange3")+ 
   geom_line(aes(y=tsdf[,"suspt"]), colour="darkslategray")+
   ylab("Telehealth Clinical Diagnosis") +
@@ -363,10 +378,33 @@ plotlist[["reference"]]<-
 #plotlist[["deathst"]]<-plotlist[["deathst"]] + 
 
 
+
+
+plotlist[["error"]]<-
+  #ggplot(aes(x=time(tsdf[,])),data=NULL)+
+  ggplot(aes(x=as.Date(date_decimal(as.numeric(time(enull))))),data=NULL)+ 
+  geom_line(aes(y=abs(enull[,14])), colour="darkorange3",alpha=.2)+ 
+  geom_line(aes(y=abs(enull[,1])), colour="darkorange3")+
+  geom_line(aes(y=abs(e[,14])), colour="darkslategray", alpha=.2)+ 
+  geom_line(aes(y=abs(e[,1])), colour="darkslategray")+
+  scale_color_manual(name="", values =c("Telehealth Diagnoses"="darkslategray","US Tests"="darkorange3")) +
+  ylab("Forecast Error") 
+#remove duplicative x axis
+#plotlist[["deathst"]]<-plotlist[["deathst"]] + 
+
+
 #ggarrange(plotlist=plotlist[c("reference","casest","deathst")],ncol=1,common.legend = T, align="v",legend="bottom")
-ggarrange(plotlist=plotlist[c("casesuw","deathsuw","reference")],ncol=1,common.legend= T, legend="bottom", align="v")
-save.image("~/teladoc-ahrq/TD-US-Surveillance.RData")
+
 }
+ggarrange(plotlist=plotlist[c("casesuw","deathsuw","reference")],ncol=1,common.legend= T, legend="bottom", align="v")
+ggarrange(plotlist=plotlist[c("casest","deathst","reference")],ncol=1,common.legend= T, legend="bottom", align="v")
+p2=c(plotlist["deathst"],plotlist2["deathst"],plotlist["casest"],plotlist2['casest'])
+ggarrange(plotlist=p2,ncol=1,common.legend= T, legend="bottom", align="v", heights=c(2,1,2,1))
+save.image("~/teladoc-ahrq/TD-US-Surveillance.RData")
+ggplot(data=as.data.frame(mse),aes(x=1:14)) + 
+  geom_line(aes(y=fitlist[["deathst"]]$mapediff))+
+  geom_line(aes(y=fitlist[["casest"]]$mapediff))
+
 myend
 
 if(false){
